@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    html, body {
+      background-color: transparent !important;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-family: Arial, sans-serif;
+    }
+
+    #canvas-container {
+      position: relative;
+      width: 600px;
+      height: 200px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    #start-btn {
+      position: absolute;
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: bold;
+      background: rgba(0, 0, 0, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      padding: 10px 20px;
+      border-radius: 25px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      transition: all 0.2s ease;
+    }
+
+    #start-btn:hover {
+      transform: scale(1.05);
+      background: rgba(0, 0, 0, 0.9);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="canvas-container">
+    <canvas id="waveCanvas"></canvas>
+    <button id="start-btn">🎤 Bấm vào đây để bật Sóng Nhạc Mic</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('waveCanvas');
+    const ctx = canvas.getContext('2d');
+    const startBtn = document.getElementById('start-btn');
+
+    // Chỉnh độ phân giải thực của Canvas
+    canvas.width = 600;
+    canvas.height = 200;
+
+    let audioContext, analyser, microphone, dataArray;
+    const barCount = 40; // Số lượng cột sóng nhạc
+
+    async function initAudio() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        microphone = audioContext.createMediaStreamSource(stream);
+
+        // Cấu hình phân tích tần số âm thanh
+        analyser.fftSize = 128; 
+        const bufferLength = analyser.frequencyBinCount;
+        dataArray = new Uint8Array(bufferLength);
+
+        microphone.connect(analyser);
+
+        // Ẩn nút kích hoạt sau khi bấm
+        startBtn.style.display = 'none';
+        
+        drawWave();
+      } catch (err) {
+        startBtn.innerText = "❌ Chưa được cấp quyền Micro!";
+      }
+    }
+
+    function drawWave() {
+      requestAnimationFrame(drawWave);
+
+      analyser.getByteFrequencyData(dataArray);
+
+      // Xóa khung hình cũ (giữ nền trong suốt)
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const width = canvas.width;
+      const height = canvas.height;
+      const barWidth = (width / barCount) - 4; // Khoảng cách giữa các cột
+      let x = 0;
+
+      // Tạo dải màu phát sáng (Gradient: Xanh Neon -> Tím -> Hồng Neon)
+      const gradient = ctx.createLinearGradient(0, height, 0, 0);
+      gradient.addColorStop(0, '#00f2fe');
+      gradient.addColorStop(0.5, '#4facfe');
+      gradient.addColorStop(1, '#ff0844');
+
+      for (let i = 0; i < barCount; i++) {
+        // Lấy giá trị biên độ âm thanh
+        let barHeight = (dataArray[i] / 255) * height;
+
+        // Cho một chiều cao tối thiểu để sóng nhạc vẫn nhè nhẹ khi im lặng
+        if (barHeight < 6) barHeight = 6;
+
+        // Vẽ hiệu ứng đổ bóng phát sáng (Glow Effect)
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = '#00f2fe';
+
+        // Vẽ cột sóng nhạc bo tròn góc
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.roundRect(x, height - barHeight, barWidth, barHeight, [4, 4, 0, 0]);
+        ctx.fill();
+
+        x += barWidth + 4;
+      }
+    }
+
+    startBtn.addEventListener('click', initAudio);
+  </script>
+
+</body>
+</html>
