@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clock Live Stream</title>
+    <title>Stream Clock with Full Ticks</title>
     <style>
         * {
             margin: 0;
@@ -16,21 +16,22 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background: #111; /* Nền tối để nổi bật đồng hồ */
-            font-family: sans-serif;
+            background: rgba(0, 0, 0, 0.2); /* Nền trong suốt / tối nhẹ */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow: hidden;
         }
 
+        /* Khung đồng hồ */
         .clock {
-            width: 300px;
-            height: 300px;
+            width: 320px;
+            height: 320px;
             position: relative;
             border-radius: 50%;
             background: rgba(255, 255, 255, 0.08);
             backdrop-filter: blur(15px);
             -webkit-backdrop-filter: blur(15px);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
             display: flex;
             justify-content: center;
             align-items: center;
@@ -44,100 +45,155 @@
             height: 12px;
             background: #fff;
             border-radius: 50%;
-            z-index: 10;
+            z-index: 20;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
         }
 
-        /* Số hiển thị */
+        /* Container chứa các vạch chia */
+        .ticks-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+        }
+
+        /* Kiểu dáng vạch phút (ngắn, mỏng) */
+        .tick {
+            position: absolute;
+            width: 2px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.35);
+            top: 8px;
+            left: 50%;
+            margin-left: -1px;
+            transform-origin: 50% 152px; /* Center xoay dựa vào bán kính đồng hồ (320px/2 - 8px) */
+        }
+
+        /* Kiểu dáng vạch giờ (dài, dày hơn) */
+        .tick.hour-tick {
+            width: 3.5px;
+            height: 14px;
+            background: rgba(255, 255, 255, 0.85);
+            top: 8px;
+            margin-left: -1.75px;
+            transform-origin: 50% 152px;
+            border-radius: 2px;
+        }
+
+        /* Các số chính */
         .number {
             position: absolute;
-            color: #fff;
-            font-size: 22px;
+            color: #ffffff;
+            font-size: 20px;
             font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+            z-index: 5;
         }
-        .n12 { top: 15px; }
-        .n3  { right: 20px; }
-        .n6  { bottom: 15px; }
-        .n9  { left: 20px; }
+        .n12 { top: 26px; }
+        .n3  { right: 28px; }
+        .n6  { bottom: 26px; }
+        .n9  { left: 28px; }
 
-        /* Khung chứa từng kim để xoay */
+        /* Khung xoay cho từng kim */
         .hand-box {
             position: absolute;
             width: 100%;
             height: 100%;
             display: flex;
             justify-content: center;
+            z-index: 10;
         }
 
         /* Kim giờ */
         .hour-hand {
             width: 6px;
-            height: 65px;
+            height: 70px;
             background: #ffffff;
             border-radius: 4px;
-            margin-top: 85px; /* Đẩy kim lên nửa trên đồng hồ */
+            margin-top: 90px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
         }
 
         /* Kim phút */
         .minute-hand {
             width: 4px;
-            height: 90px;
-            background: rgba(255, 255, 255, 0.85);
+            height: 98px;
+            background: rgba(255, 255, 255, 0.9);
             border-radius: 4px;
-            margin-top: 60px;
+            margin-top: 62px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
         }
 
         /* Kim giây */
         .seconds-hand {
             width: 2px;
-            height: 110px;
-            background: #ff4757;
+            height: 118px;
+            background: #ff4757; /* Kim giây màu đỏ nổi bật */
             border-radius: 2px;
-            margin-top: 40px;
+            margin-top: 42px;
+            box-shadow: 0 0 8px rgba(255, 71, 87, 0.6);
         }
     </style>
 </head>
 <body>
 
     <div class="clock">
+        <!-- Nơi tự động vẽ 60 vạch chia -->
+        <div class="ticks-container" id="ticks"></div>
+
+        <!-- Các con số -->
         <div class="number n12">12</div>
         <div class="number n3">3</div>
         <div class="number n6">6</div>
         <div class="number n9">9</div>
 
-        <!-- Bọc từng kim trong khung riêng để xoay dễ hơn -->
+        <!-- Các kim đồng hồ -->
         <div class="hand-box" id="b-hour"><div class="hour-hand"></div></div>
         <div class="hand-box" id="b-minute"><div class="minute-hand"></div></div>
         <div class="hand-box" id="b-seconds"><div class="seconds-hand"></div></div>
     </div>
 
     <script>
-        // Lấy các khung kim
+        // 1. Tự động vẽ 60 vạch chia phút & giờ bằng JavaScript
+        const ticksContainer = document.getElementById('ticks');
+        for (let i = 0; i < 60; i++) {
+            const tick = document.createElement('div');
+            // Cứ 5 vạch sẽ là 1 vạch giờ (đậm & dài hơn)
+            if (i % 5 === 0) {
+                tick.className = 'tick hour-tick';
+            } else {
+                tick.className = 'tick';
+            }
+            // Xoay mỗi vạch 6 độ (60 * 6deg = 360deg)
+            tick.style.transform = `rotate(${i * 6}deg)`;
+            ticksContainer.appendChild(tick);
+        }
+
+        // 2. Lấy các kim
         const bHour = document.getElementById("b-hour");
         const bMinute = document.getElementById("b-minute");
         const bSeconds = document.getElementById("b-seconds");
 
-        function runClock() {
+        function updateClock() {
             const now = new Date();
             const hr = now.getHours();
             const min = now.getMinutes();
             const sec = now.getSeconds();
 
-            // Tính góc xoay chuẩn
+            // Tính góc xoay chính xác
             const secDeg = sec * 6;
             const minDeg = (min * 6) + (sec * 0.1);
             const hrDeg = ((hr % 12) * 30) + (min * 0.5);
 
             // Gán góc xoay
-            bHour.style.transform = "rotate(" + hrDeg + "deg)";
-            bMinute.style.transform = "rotate(" + minDeg + "deg)";
-            bSeconds.style.transform = "rotate(" + secDeg + "deg)";
+            bHour.style.transform = `rotate(${hrDeg}deg)`;
+            bMinute.style.transform = `rotate(${minDeg}deg)`;
+            bSeconds.style.transform = `rotate(${secDeg}deg)`;
         }
 
-        // Chạy ngay lập tức khi mở trang
-        runClock();
-
-        // Lặp lại mỗi 1 giây (1000ms)
-        setInterval(runClock, 1000);
+        // Chạy đồng hồ
+        updateClock();
+        setInterval(updateClock, 1000);
     </script>
 </body>
 </html>
